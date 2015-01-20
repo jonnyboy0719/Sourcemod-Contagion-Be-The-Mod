@@ -5,7 +5,7 @@
 #include <sdktools>
 #include <contagion>
 
-#define PLUGIN_VERSION "1.4"
+#define PLUGIN_VERSION "1.5"
 // The higher number the less chance the carrier can infect
 #define INFECTION_MAX_CHANCE	20
 
@@ -234,16 +234,13 @@ public Action:EVENT_PlayerDeath(Handle:hEvent,const String:name[],bool:dontBroad
 //	if (!IsValidClient(attacker)) return;
 	if (!IsValidClient(victim, false)) return;
 	
-	PrintToServer("[[ I AM DED ]]");
+//	PrintToServer("[[ I AM DED ]]");
 	CheckHumanSurvivors();
 	
 	if (g_nBeTheMod[victim][g_nIfRegen] == STATE_REGEN)
 		g_nBeTheMod[victim][g_nIfRegen] = STATE_NO_REGEN;
-	if (g_nBeTheMod[victim][g_nIfSpecial_Carrier] == STATE_CARRIER && g_nBeTheMod[victim][g_nIfSpecial_Riot] == STATE_RIOT)
-	{
-		g_nBeTheMod[victim][g_nIfSpecial_Carrier] = STATE_NOT_CARRIER;
+	if (g_nBeTheMod[victim][g_nIfSpecial_Riot] == STATE_RIOT)
 		g_nBeTheMod[victim][g_nIfSpecial_Riot] = STATE_NOT_RIOT;
-	}
 }
 
 public CheckHumanSurvivors()
@@ -274,11 +271,8 @@ public EVENT_NoSurvivorsLeft()
 				g_nBeTheMod[i][g_nIfRegen] = STATE_NO_REGEN;
 			if (g_nBeTheMod[i][g_nIfSpecial_Carrier] == STATE_CARRIER)
 				g_nBeTheMod[i][g_nIfSpecial_Carrier] = STATE_NOT_CARRIER;
-			if (g_nBeTheMod[i][g_nIfSpecial_Carrier] == STATE_CARRIER && g_nBeTheMod[i][g_nIfSpecial_Riot] == STATE_RIOT)
-			{
-				g_nBeTheMod[i][g_nIfSpecial_Carrier] = STATE_NOT_CARRIER;
+			if (g_nBeTheMod[i][g_nIfSpecial_Riot] == STATE_RIOT)
 				g_nBeTheMod[i][g_nIfSpecial_Riot] = STATE_NOT_RIOT;
-			}
 		}
 	}
 }
@@ -292,7 +286,13 @@ public Action:EVENT_PlayerSpawned(Handle:hEvent,const String:name[],bool:dontBro
 	
 	// Lets make a small timer, so the model can be set 1.2 second(s) after the player has actually spawned, so we can actually override the model.
 	// Note#1: Don't change this, since it might screw up the spawning for the survivors.
-	CreateTimer(1.2, SetModel, client);
+	new Float:SetTime;
+	if (GetClientTeam(client) == _:CTEAM_Survivor)
+		SetTime = 1.2 + float(client) / 8;
+	else
+		SetTime = 0.2;
+	PrintToServer("[[ Client Time: %f ]]", SetTime);
+	CreateTimer(SetTime, SetModel, client);
 }
 
 public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damagetype, &weapon, Float:damageForce[3], Float:damagePosition[3], damagecustom)
