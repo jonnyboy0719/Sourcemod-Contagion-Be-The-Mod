@@ -5,7 +5,7 @@
 #include <sdktools>
 #include <contagion>
 
-#define PLUGIN_VERSION "1.5"
+#define PLUGIN_VERSION "1.6"
 // The higher number the less chance the carrier can infect
 #define INFECTION_MAX_CHANCE	20
 
@@ -452,9 +452,9 @@ public Action:SetModel(Handle:timer, any:client)
 			new newmaxhealth = GetConVarInt(g_SetRiotHealth);
 			CONTAGION_SetNewHealth(client, sethealth, newmaxhealth);
 			CONTAGION_RemoveAllFirearms(client);
-			GivePlayerItem(client, "weapon_ar15");
-			GivePlayerItem(client, "weapon_revolver");
-			GivePlayerItem(client, "weapon_grenade");
+			CONTAGION_GiveClientWeapon(client, "weapon_ar15", 60);
+			CONTAGION_GiveClientWeapon(client, "weapon_revolver", 36);
+			CONTAGION_GiveClientWeapon(client, "weapon_grenade");
 		}
 	}
 }
