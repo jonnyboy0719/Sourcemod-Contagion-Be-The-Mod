@@ -656,6 +656,7 @@ public Menu_Model(Handle:menu, MenuAction:action, param1, param2)
 		decl String:slot2_ammo[256];
 		decl String:slot3_ammo[256];
 		decl String:slot4_ammo[256];
+		decl String:getmaxsurv[256];
 		do
 		{
 			KvGetSectionName(kv, buffer, sizeof(buffer));
@@ -668,6 +669,7 @@ public Menu_Model(Handle:menu, MenuAction:action, param1, param2)
 				KvGetString(kv, "zhealth", zhealth, sizeof(zhealth),"");
 				KvGetString(kv, "armor", armor, sizeof(armor),"");
 				KvGetString(kv, "group", getgroup, sizeof(getgroup),"");
+				KvGetString(kv, "max", getmaxsurv, sizeof(getmaxsurv),"");
 				KvGetString(kv, "extra", extra, sizeof(extra),"");
 				KvGotoFirstSubKey(kv);
 				KvGetString(kv, "slot1", slot1, sizeof(slot1),"");
@@ -704,6 +706,10 @@ public Menu_Model(Handle:menu, MenuAction:action, param1, param2)
 			PrintToChat(param1,"Sorry, You do not have access to this model.");
 			return;
 		}
+		
+		// Get max survivors (how many can use it until it can't be used)
+		new max = StringToInt(getmaxsurv);
+		if(!CanUseModel(max, path)) return;
 		
 		if (GetConVarInt(g_hDebugMode) >= 1)
 		{
@@ -1078,6 +1084,7 @@ public Action:SetSpawnModel(Handle:timer, any:client)
 	decl String:slot2_ammo[256];
 	decl String:slot3_ammo[256];
 	decl String:slot4_ammo[256];
+	decl String:getmaxsurv[256];
 	do
 	{
 		KvGetSectionName(kv, buffer, sizeof(buffer));
@@ -1090,6 +1097,7 @@ public Action:SetSpawnModel(Handle:timer, any:client)
 			KvGetString(kv, "zhealth", zhealth, sizeof(zhealth),"");
 			KvGetString(kv, "armor", armor, sizeof(armor),"");
 			KvGetString(kv, "group", getgroup, sizeof(getgroup),"");
+			KvGetString(kv, "max", getmaxsurv, sizeof(getmaxsurv),"");
 			KvGetString(kv, "extra", extra, sizeof(extra),"");
 			KvGotoFirstSubKey(kv);
 			KvGetString(kv, "slot1", slot1, sizeof(slot1),"");
@@ -1108,6 +1116,9 @@ public Action:SetSpawnModel(Handle:timer, any:client)
 	if (!StrEqual(armor,"") || StrEqual(armor,"true"))
 		setarmor = true;
 	
+	// Get max survivors (how many can use it until it can't be used)
+	new max = StringToInt(getmaxsurv);
+	if(!CanUseModel(max, path)) return;
 	
 	// Lets set the players modelinfo
 	if (!StrEqual(path,"") && IsModelPrecached(path) && IsClientConnected(client))
@@ -1632,6 +1643,32 @@ stock bool:IsValidClient(client, bool:bCheckAlive=true)
 	if(IsFakeClient(client)) return false;
 	if(bCheckAlive) return IsPlayerAlive(client);
 	return true;
+}
+
+//=========================
+// bool:CanUseModel()
+//========================
+
+stock bool:CanUseModel(getmax, const String:getmodel[])
+{
+	if(getmax == 0)	return true;
+	if(StrEqual(getmodel,"")) return true;
+	
+	new String:plymdl[128];
+	decl iCount, i; iCount = 0;
+	
+	for( i = 1; i <= MaxClients; i++ )
+		if( IsClientInGame(i) && IsPlayerAlive(i) )
+		{
+			GetEntPropString(i, Prop_Data, "m_ModelName", plymdl, 128);
+			if (StrEqual(plymdl, getmodel))
+				iCount++;
+		}
+	
+	if(iCount == getmax)
+		return false;
+	else
+		return true;
 }
 
 //=========================
