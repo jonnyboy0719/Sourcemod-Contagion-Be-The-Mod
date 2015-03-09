@@ -14,7 +14,7 @@
 #include <sdktools>
 #include <contagion>
 
-#define PLUGIN_VERSION "2.0"
+#define PLUGIN_VERSION "2.1"
 // The higher number the less chance the carrier can infect
 #define INFECTION_MAX_CHANCE	20
 
@@ -533,23 +533,18 @@ Handle:BuildMainMenu()
 	}
 	
 	decl String:buffer[30];
-	decl String:path[256];
+	
 	do
 	{
 		KvGetSectionName(kv, buffer, sizeof(buffer));
 		
 		AddMenuItem(menu,buffer,buffer);
 		
-		KvGetString(kv, "path", path, sizeof(path),"");
-		
-		KvGoBack(kv);
-		KvGoBack(kv);
-		
 	} while (KvGotoNextKey(kv));
 	
 	KvRewind(kv);
 	
-	SetMenuTitle(menu, "Choose a Model");
+	SetMenuTitle(menu, "Choose a Model Group");
  
 	return menu;
 }
@@ -595,7 +590,7 @@ public Menu_Group(Handle:menu, MenuAction:action, param1, param2)
 		KvGotoFirstSubKey(kv);
 		
 		new Handle:tempmenu = CreateMenu(Menu_Model);
-
+		
 		decl String:buffer[30];
 		decl String:path[256];
 		do
@@ -605,11 +600,12 @@ public Menu_Group(Handle:menu, MenuAction:action, param1, param2)
 			KvGetString(kv, "path", path, sizeof(path),"");
 			
 			AddMenuItem(tempmenu,buffer,buffer);
-	
-		} while (KvGotoNextKey(kv));
 			
+		} while (KvGotoNextKey(kv));
+		
 		SetMenuTitle(tempmenu, info);
 		
+		KvRewind(kv);
 		KvRewind(kv);
 		
 		DisplayMenu(tempmenu, param1, MENU_TIME_FOREVER);
@@ -1171,7 +1167,6 @@ public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damage
 	if (!IsValidClient(attacker)) return;
 	if (!IsValidClient(victim)) return;
 	
-	
 	if (GetClientTeam(victim) == _:CTEAM_Zombie)
 	{
 		// Don't continue if the victim is also the attacker
@@ -1230,28 +1225,49 @@ public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damage
 		new String:WeaponName[256];
 		GetClientWeapon(attacker, WeaponName, sizeof(WeaponName));
 		
-		if(g_nSurvivorPerks[victim][STATE_MELEE_GOOD])
+		// Debbuger that tells the client which gun he is using and how much damage he is doing.
+		if (GetConVarInt(g_hDebugMode) >= 1)
+		{
+			PrintToChat(attacker,"[BTM || DEBUGGER] Weapon: %s | Damage: %f2.2", WeaponName, damage);
+		}
+		
+		if(g_nSurvivorPerks[attacker][STATE_MELEE_GOOD])
 		{
 			if(StrEqual(WeaponName,"weapon_melee"))
 			{
 				// Setup new damage
 				damage * 1.30;
+				// Show how much extra damage we are doing currently
+				if (GetConVarInt(g_hDebugMode) >= 1)
+				{
+					PrintToChat(attacker,"[BTM || DEBUGGER] Using perk \"Melee+\" | New Damage: %f2.2 ", damage);
+				}
 			}
 		}
-		if(g_nSurvivorPerks[victim][STATE_MELEE_BAD])
+		if(g_nSurvivorPerks[attacker][STATE_MELEE_BAD])
 		{
 			if(StrEqual(WeaponName,"weapon_melee"))
 			{
 				// Setup new damage
 				damage / 1.25;
+				// Show how much extra damage we are doing currently
+				if (GetConVarInt(g_hDebugMode) >= 1)
+				{
+					PrintToChat(attacker,"[BTM || DEBUGGER] Using perk \"Melee-\" | New Damage: %f2.2 ", damage);
+				}
 			}
 		}
-		if(g_nSurvivorPerks[victim][STATE_DEMO])
+		if(g_nSurvivorPerks[attacker][STATE_DEMO])
 		{
 			if(StrEqual(WeaponName,"weapon_grenade") || StrEqual(WeaponName,"weapon_ied"))
 			{
 				// Setup new damage
 				damage * 1.40;
+				// Show how much extra damage we are doing currently
+				if (GetConVarInt(g_hDebugMode) >= 1)
+				{
+					PrintToChat(attacker,"[BTM || DEBUGGER] Using perk \"Demolition\" | New Damage: %f2.2 ", damage);
+				}
 			}
 		}
 		if(g_nSurvivorPerks[victim][STATE_SREGEN])
@@ -1640,7 +1656,7 @@ stock bool:IsValidClient(client, bool:bCheckAlive=true)
 	if(client < 1 || client > MaxClients) return false;
 	if(!IsClientInGame(client)) return false;
 	if(IsClientSourceTV(client) || IsClientReplay(client)) return false;
-	if(IsFakeClient(client)) return false;
+	if(IsFakeClient(client)) return true; // must be true, so it checks for zombies etc..
 	if(bCheckAlive) return IsPlayerAlive(client);
 	return true;
 }
