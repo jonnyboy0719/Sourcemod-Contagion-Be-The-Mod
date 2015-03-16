@@ -3,7 +3,7 @@
 	║	As of V1.8, i will now have "Survivor Selection Menu". The idea is from L4D/L4D2 CSM mod where you write csm	║
 	║	, !csm or /csm to activate the menu. This will however not change the Carrier settings on the zombie team.		║
 	╟───────────────────────────────────────────────────────────────────────────────────────────────────────────────────╢
-	║	You can also set max cap on any survivor, and by writing -1 on the max count, it will be infinite.				║
+	║	You can also set max cap on any survivor, and by writing 0 on the max count, it will be infinite.				║
 	╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
 */
 
@@ -14,7 +14,7 @@
 #include <sdktools>
 #include <contagion>
 
-#define PLUGIN_VERSION "2.1"
+#define PLUGIN_VERSION "2.2"
 // The higher number the less chance the carrier can infect
 #define INFECTION_MAX_CHANCE	20
 
@@ -50,9 +50,6 @@ enum g_eRegene
 enum g_eperks
 {
 	STATE_NONE=false,
-	STATE_MELEE_GOOD=false,
-	STATE_MELEE_BAD=false,
-	STATE_DEMO=false,
 	STATE_EXPLOBOLT=false,
 	STATE_MEDIC=false,
 	STATE_SREGEN=false
@@ -90,6 +87,8 @@ new Handle:kv;
 new String:authid[MAXPLAYERS+1][35];
 new CanBeCarrier;
 new Handle:g_hDebugMode;
+new Handle:g_canuseallmodels;
+new Handle:g_canuseallmodels_group;
 new Handle:g_hCvarMode;
 new Handle:g_hCvarNormalInfectionMode;
 new Handle:g_SetWhiteyHealth;
@@ -149,6 +148,8 @@ public OnPluginStart()
 	CreateConVar("sm_bethemod_version", PLUGIN_VERSION, "Current \"Be The Special Survivor/Infected\" Version",
 		FCVAR_NOTIFY | FCVAR_DONTRECORD | FCVAR_SPONLY);
 	g_hDebugMode						= CreateConVar("sm_bethemod_debug", "0", "0 - Disable debugging | 1 - Enable Debugging");
+	g_canuseallmodels					= CreateConVar("sm_bethemod_grantallaccess", "0", "0 - Disable \"Grant All Access\" | 1 - Enable \"Grant All Access\"");
+	g_canuseallmodels_group				= CreateConVar("sm_bethemod_grantallaccess_group", "Admin", "Set which group should have access to the models no matter what");
 	g_hCvarMode							= CreateConVar("sm_bethemod_max_carrier", "1", "How many carriers should can we have alive at once?");
 	g_hCvarNormalInfectionMode			= CreateConVar("sm_bethemod_infection_normal", "0", "0 - Disable normal zombie infection | 1 - Enable normal zombie infection");
 	g_SetWhiteyHealth					= CreateConVar("sm_bethemod_carrier_health", "350.0", "Value to change the carrier health to. Minimum 250.", 
@@ -682,13 +683,25 @@ public Menu_Model(Handle:menu, MenuAction:action, param1, param2)
 		} while (KvGotoNextKey(kv));
 		
 		// check if they have access
-		new String:temp[5];
+		new String:temp[255];
 		new AdminId:AdmId = GetUserAdmin(param1);
 		new count = GetAdminGroupCount(AdmId);
 		new bool:access = false;
 		for (new i =0; i<count; i++) 
 		{
 			if (FindAdmGroup(getgroup) == GetAdminGroup(AdmId, i, temp, sizeof(temp)))
+			{
+				access = true;
+			}
+		}
+		
+		// If the user have been granted "can use all models"
+		decl String:mdl[255];
+		GetConVarString(g_canuseallmodels_group, mdl, sizeof(mdl));
+		
+		if (g_canuseallmodels)
+		{
+			if (StrEqual(mdl,temp))
 			{
 				access = true;
 			}
@@ -748,8 +761,17 @@ public Menu_Model(Handle:menu, MenuAction:action, param1, param2)
 				SetModel(param1, path, f_path, z_path, hhealth, zzhealth, slot1, ammo1, slot2, ammo2, slot3, ammo3, slot4, ammo4, setarmor, info);
 				ResetPerkStatus(param1);
 				SetSurvivorPerks(param1, extra);
+				g_nBeTheMod[param1][g_nIfSelectedSurvivor] = STATE_SELECTED;
 			}
-			g_nBeTheMod[param1][g_nIfSelectedSurvivor] = STATE_SELECTED;
+			// If the model is not precached, lets give the server owner a warning, and promote some more warnings under the log file.
+			if(!IsModelPrecached(path) || !IsModelPrecached(f_path) || !IsModelPrecached(z_path))
+				LogToFileEx(logFilePath, "[BTM] The following file(s) may or may not precached properly!");
+			if(!IsModelPrecached(path))
+				LogToFileEx(logFilePath, " > %s", path);
+			if(!IsModelPrecached(f_path))
+				LogToFileEx(logFilePath, " > %s", f_path);
+			if(!IsModelPrecached(z_path))
+				LogToFileEx(logFilePath, " > %s", z_path);
 		}
 		else if (g_nBeTheMod[param1][g_nIfSelectedSurvivor] == STATE_SELECTED)
 			PrintToChat(param1,"[CSM] You can't change survivor twice, wait for the next round.");
@@ -961,12 +983,6 @@ public ResetPerkStatus(client)
 	
 	if (g_nSurvivorPerks[client][STATE_EXPLOBOLT])
 		g_nSurvivorPerks[client][STATE_EXPLOBOLT] = false;
-	if (g_nSurvivorPerks[client][STATE_MELEE_GOOD])
-		g_nSurvivorPerks[client][STATE_MELEE_GOOD] = false;
-	if (g_nSurvivorPerks[client][STATE_MELEE_BAD])
-		g_nSurvivorPerks[client][STATE_MELEE_BAD] = false;
-	if (g_nSurvivorPerks[client][STATE_DEMO])
-		g_nSurvivorPerks[client][STATE_DEMO] = false;
 	if (g_nSurvivorPerks[client][STATE_MEDIC])
 		g_nSurvivorPerks[client][STATE_MEDIC] = false;
 	if (g_nSurvivorPerks[client][STATE_SREGEN])
@@ -1038,7 +1054,7 @@ public Action:SetSpawnModel(Handle:timer, any:client)
 	KvGoBack(kv);
 	KvGoBack(kv);
 	
-	new String:temp[2];
+	new String:temp[255];
 	new AdminId:AdmId = GetUserAdmin(client);
 	new count = GetAdminGroupCount(AdmId);
 	new bool:setarmor = false;
@@ -1049,6 +1065,18 @@ public Action:SetSpawnModel(Handle:timer, any:client)
 		{
 			access = true;
 			break;
+		}
+	}
+	
+	// If the user have been granted "can use all models"
+	decl String:mdl[255];
+	GetConVarString(g_canuseallmodels_group, mdl, sizeof(mdl));
+	
+	if (g_canuseallmodels)
+	{
+		if (StrEqual(mdl,temp))
+		{
+			access = true;
 		}
 	}
 	
@@ -1155,6 +1183,15 @@ public Action:SetSpawnModel(Handle:timer, any:client)
 		ResetPerkStatus(client);
 		SetSurvivorPerks(client, extra);
 	}
+	// If the model is not precached, lets give the server owner a warning, and promote some more warnings under the log file.
+	if(!IsModelPrecached(path) || !IsModelPrecached(f_path) || !IsModelPrecached(z_path))
+		LogToFileEx(logFilePath, "[BTM] The following file(s) may or may not precached properly!");
+	if(!IsModelPrecached(path))
+		LogToFileEx(logFilePath, " > %s", path);
+	if(!IsModelPrecached(f_path))
+		LogToFileEx(logFilePath, " > %s", f_path);
+	if(!IsModelPrecached(z_path))
+		LogToFileEx(logFilePath, " > %s", z_path);
 }
 
 //=========================
@@ -1218,58 +1255,9 @@ public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damage
 		}
 	}
 	
-	// Survivor Perks (DMG TYPES)
+	// Survivor Perks
 	if (GetClientTeam(attacker) == _:CTEAM_Survivor)
 	{
-		// Get weapon name
-		new String:WeaponName[256];
-		GetClientWeapon(attacker, WeaponName, sizeof(WeaponName));
-		
-		// Debbuger that tells the client which gun he is using and how much damage he is doing.
-		if (GetConVarInt(g_hDebugMode) >= 1)
-		{
-			PrintToChat(attacker,"[BTM || DEBUGGER] Weapon: %s | Damage: %f2.2", WeaponName, damage);
-		}
-		
-		if(g_nSurvivorPerks[attacker][STATE_MELEE_GOOD])
-		{
-			if(StrEqual(WeaponName,"weapon_melee"))
-			{
-				// Setup new damage
-				damage * 1.30;
-				// Show how much extra damage we are doing currently
-				if (GetConVarInt(g_hDebugMode) >= 1)
-				{
-					PrintToChat(attacker,"[BTM || DEBUGGER] Using perk \"Melee+\" | New Damage: %f2.2 ", damage);
-				}
-			}
-		}
-		if(g_nSurvivorPerks[attacker][STATE_MELEE_BAD])
-		{
-			if(StrEqual(WeaponName,"weapon_melee"))
-			{
-				// Setup new damage
-				damage / 1.25;
-				// Show how much extra damage we are doing currently
-				if (GetConVarInt(g_hDebugMode) >= 1)
-				{
-					PrintToChat(attacker,"[BTM || DEBUGGER] Using perk \"Melee-\" | New Damage: %f2.2 ", damage);
-				}
-			}
-		}
-		if(g_nSurvivorPerks[attacker][STATE_DEMO])
-		{
-			if(StrEqual(WeaponName,"weapon_grenade") || StrEqual(WeaponName,"weapon_ied"))
-			{
-				// Setup new damage
-				damage * 1.40;
-				// Show how much extra damage we are doing currently
-				if (GetConVarInt(g_hDebugMode) >= 1)
-				{
-					PrintToChat(attacker,"[BTM || DEBUGGER] Using perk \"Demolition\" | New Damage: %f2.2 ", damage);
-				}
-			}
-		}
 		if(g_nSurvivorPerks[victim][STATE_SREGEN])
 		{
 			if (g_nBeTheMod[victim][g_nIfRegen] == STATE_REGEN)
@@ -1361,6 +1349,97 @@ stock SpawnMedkit(origin)
 	
 	DispatchSpawn(firstaid);
 	ActivateEntity(firstaid);
+}
+
+//=========================
+// SpawnMelee()
+//========================
+
+stock SpawnMelee(origin, const String:weapon[]="", bool:goodguns=true)
+{
+	new melee = CreateEntityByName("weapon_melee");
+	
+	new String:position[64];
+	decl String:RandomWeapon[255];
+	decl String:GetWep[255];
+	decl Float:pos[3];
+	
+	if(!IsValidEntity(melee))
+		return;
+	
+	if(!IsValidEntity(origin))
+		return;
+	
+	GetClientAbsOrigin(origin, pos);
+	
+	if (StrEqual(weapon,""))
+	{
+		new random_weapon = GetRandomInt(0, 7);
+		switch(random_weapon)
+		{
+			case 0:
+			{
+				RandomWeapon = "fireaxe";
+			}
+			case 1:
+			{
+				RandomWeapon = "kabar";
+			}
+			case 2:
+			{
+				if(goodguns)
+					RandomWeapon = "sledgehammer";
+				else
+					RandomWeapon = "baseballbat";
+			}
+			case 3:
+			{
+				if(goodguns)
+					RandomWeapon = "machete";
+				else
+					RandomWeapon = "wrench";
+			}
+			case 4:
+			{
+				RandomWeapon = "baseballbat";
+			}
+			case 5:
+			{
+				RandomWeapon = "baseballbat_metal";
+			}
+			case 6:
+			{
+				RandomWeapon = "wrench";
+			}
+			case 7:
+			{
+				if(goodguns)
+					RandomWeapon = "golfclub";
+				else
+					RandomWeapon = "fireaxe";
+			}
+			
+			default:
+			{
+				RandomWeapon = "kabar";
+			}
+		}
+		
+		GetWep = RandomWeapon;
+	}
+	
+	pos[2] = pos[2] + 50;
+	
+	Format(position, sizeof(position), "%1.1f %1.1f %1.1f", pos[0], pos[1], pos[2]);
+	
+	DispatchKeyValue(melee, "origin", position);
+	if (StrEqual(weapon,""))
+		DispatchKeyValue(melee, "melee_script_name", GetWep);
+	else
+		DispatchKeyValue(melee, "melee_script_name", weapon);
+	
+	DispatchSpawn(melee);
+	ActivateEntity(melee);
 }
 
 //=========================
@@ -1614,15 +1693,11 @@ SetSurvivorPerks(client, const String:extras[])
 	}
 	if (StrContains(extras, "melee+", false) != -1)
 	{
-		g_nSurvivorPerks[client][STATE_MELEE_GOOD] = true;
+		SpawnMelee(client);
 	}
 	if (StrContains(extras, "melee-", false) != -1)
 	{
-		g_nSurvivorPerks[client][STATE_MELEE_BAD] = true;
-	}
-	if (StrContains(extras, "demo", false) != -1)
-	{
-		g_nSurvivorPerks[client][STATE_DEMO] = true;
+		SpawnMelee(client,_,false);
 	}
 	if (StrContains(extras, "explobolt", false) != -1)
 	{
